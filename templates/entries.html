@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+
+    <div class="page-header">
+        <div class="eyebrow">Past Entries</div>
+        <h1>Your <em>story</em> so far</h1>
+        <p>Every entry you've written — a record of your inner journey.</p>
+    </div>
+
+    <!-- Search -->
+    <div style="margin-bottom:28px; animation:fadeUp 0.5s ease 0.1s both; opacity:0;">
+        <input
+            type="text"
+            id="searchInput"
+            placeholder="Search your entries..."
+            oninput="filterEntries()"
+            onfocus="this.style.borderColor='rgba(124,92,191,0.4)'; this.style.boxShadow='0 0 0 3px rgba(124,92,191,0.08)';"
+            onblur="this.style.borderColor='var(--border)'; this.style.boxShadow='none';"
+            style="width:100%; padding:12px 18px; background:var(--surface); border:1px solid var(--border); border-radius:12px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:0.9rem; outline:none; transition:all 0.2s ease; box-shadow:0 2px 12px rgba(124,92,191,0.05);"
+        />
+    </div>
+
+    <div id="entriesList" style="display:flex; flex-direction:column; gap:16px;"></div>
+    <div id="emptyState" style="display:none; text-align:center; padding:60px 0; color:var(--muted); font-style:italic;"></div>
+
+</div>
+
+<style>
+.entry-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px 24px;
+    transition: all 0.2s ease;
+    animation: fadeUp 0.4s ease both;
+    box-shadow: 0 2px 16px rgba(124,92,191,0.05);
+}
+.entry-card:hover {
+    border-color: rgba(124,92,191,0.25);
+    box-shadow: 0 4px 24px rgba(124,92,191,0.1);
+    transform: translateY(-2px);
+}
+.entry-card-date {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.entry-card-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 14px;
+}
+.entry-card-emotions { display:flex; gap:8px; flex-wrap:wrap; }
+.emotion-tag { font-size:0.72rem; padding:4px 12px; border-radius:20px; font-weight:500; }
+.tag-joy     { background:rgba(124,92,191,0.1);  color:#7c5cbf; }
+.tag-anxiety { background:rgba(232,146,74,0.1);  color:#e8924a; }
+.tag-sadness { background:rgba(91,159,212,0.1);  color:#5b9fd4; }
+.tag-fear    { background:rgba(212,91,122,0.1);  color:#d45b7a; }
+</style>
+
+<script>
+let allEntries = [];
+const COLORS = { joy:'#7c5cbf', anxiety:'#e8924a', sadness:'#5b9fd4', fear:'#d45b7a' };
+
+function formatDate(raw) {
+    const d = new Date(raw);
+    return d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
+        + ' · ' + d.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+}
+
+function dominant(e) {
+    return Object.entries({ joy:e.joy, anxiety:e.anxiety, sadness:e.sadness, fear:e.fear })
+        .sort((a,b)=>b[1]-a[1])[0];
+}
+
+function renderEntries(entries) {
+    const list = document.getElementById('entriesList');
+    const empty = document.getElementById('emptyState');
+
+    if (!entries.length) {
+        list.innerHTML = '';
+        empty.style.display = 'block';
+        empty.textContent = 'No entries found.';
+        return;
+    }
+
+    empty.style.display = 'none';
+    list.innerHTML = entries.map((e, i) => {
+        const [domEmo] = dominant(e);
+        const tags = Object.entries({ joy:e.joy, anxiety:e.anxiety, sadness:e.sadness, fear:e.fear })
+            .filter(([,v]) => v > 0.2)
+            .sort((a,b)=>b[1]-a[1])
+            .map(([k,v]) => `<span class="emotion-tag tag-${k}">${k} ${(v*100).toFixed(0)}%</span>`)
+            .join('');
+
+        return `<div class="entry-card" style="animation-delay:${i*0.05}s">
+            <div class="entry-card-date">
+                <span>${formatDate(e.date)}</span>
+                <span style="color:${COLORS[domEmo]}; font-size:0.7rem; background:${COLORS[domEmo]}18; padding:2px 8px; border-radius:10px;">${domEmo}</span>
+            </div>
+            <div class="entry-card-text">${e.text}</div>
+            ${tags ? `<div class="entry-card-emotions">${tags}</div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function filterEntries() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    renderEntries(q ? allEntries.filter(e => e.text.toLowerCase().includes(q)) : allEntries);
+}
+
+async function loadEntries() {
+    try {
+        const res = await fetch('/entries');
+        allEntries = await res.json();
+        renderEntries(allEntries);
+    } catch(e) {
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('emptyState').textContent = 'Could not load entries.';
+    }
+}
+
+loadEntries();
+</script>
+{% endblock %}

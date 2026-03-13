@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+
+    <div class="page-header">
+        <div class="eyebrow">Daily Journal</div>
+        <h1>What's on your <em>mind</em> today?</h1>
+        <p>Write freely. Your thoughts are safe here — no judgment, just you.</p>
+    </div>
+
+    <!-- Streak Banner -->
+    <div id="streakBanner" style="display:none; margin-bottom:24px; animation:fadeUp 0.5s ease both;">
+        <div style="display:inline-flex; align-items:center; gap:10px; background:linear-gradient(135deg,rgba(124,92,191,0.1),rgba(176,157,224,0.1)); border:1px solid rgba(124,92,191,0.2); padding:10px 20px; border-radius:30px;">
+            <span style="font-size:1.1rem;">🔥</span>
+            <span id="streakText" style="font-size:0.875rem; color:var(--accent); font-weight:500;"></span>
+        </div>
+    </div>
+
+    <!-- Write Card -->
+    <div class="card" style="animation:fadeUp 0.6s ease 0.1s both; opacity:0;">
+        <textarea
+            id="journalText"
+            placeholder="Start writing... what happened today? How are you feeling?"
+            oninput="updateWordCount()"
+            onfocus="this.style.borderColor='rgba(124,92,191,0.4)'; this.style.boxShadow='0 0 0 3px rgba(124,92,191,0.08)';"
+            onblur="this.style.borderColor='var(--border)'; this.style.boxShadow='none';"
+            style="width:100%; min-height:240px; background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:20px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:1rem; font-weight:300; line-height:1.8; resize:vertical; outline:none; transition:border-color 0.2s ease, box-shadow 0.2s ease;"
+        ></textarea>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+            <span id="wordCount" style="font-size:0.78rem; color:var(--muted);">0 words</span>
+            <div style="display:flex; gap:10px;">
+                <a href="/therapist-page" class="btn btn-secondary" style="text-decoration:none;">
+                    💬 Talk to Therapist
+                </a>
+                <button class="btn btn-primary" onclick="saveEntry()" id="saveBtn">
+                    <span id="saveBtnText">✦ Save Entry</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Writing Prompt -->
+    <div style="margin-top:20px; animation:fadeUp 0.6s ease 0.2s both; opacity:0;">
+        <div style="padding:18px 22px; background:var(--surface); border:1px solid var(--border); border-radius:16px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-shadow:0 2px 12px rgba(124,92,191,0.05);">
+            <div>
+                <div style="font-size:0.7rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Writing Prompt</div>
+                <div id="promptText" style="font-family:'Playfair Display',serif; font-size:0.95rem; color:var(--text); font-style:italic; line-height:1.5;"></div>
+            </div>
+            <button onclick="newPrompt()" title="New prompt"
+                style="background:var(--surface2); border:1px solid var(--border); color:var(--muted); cursor:pointer; font-size:1rem; padding:8px 10px; border-radius:10px; transition:all 0.2s; flex-shrink:0;"
+                onmouseover="this.style.color='var(--accent)'; this.style.borderColor='rgba(124,92,191,0.3)';"
+                onmouseout="this.style.color='var(--muted)'; this.style.borderColor='var(--border)';">↻</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const prompts = [
+    "Describe one moment today where you felt fully present.",
+    "What's something you're carrying right now that you haven't said out loud?",
+    "If your mood today had a color, what would it be and why?",
+    "What drained your energy today, and what gave it back?",
+    "Write about something small that made you pause today.",
+    "What would you tell yourself from a week ago?",
+    "Describe how your body feels right now, physically and emotionally.",
+    "What are you avoiding thinking about? Write about that.",
+    "What did today ask of you that you didn't expect?",
+    "What's one thing you're proud of today, even if it's tiny?"
+];
+
+function newPrompt() {
+    document.getElementById('promptText').textContent = prompts[Math.floor(Math.random() * prompts.length)];
+}
+
+function updateWordCount() {
+    const text = document.getElementById('journalText').value.trim();
+    const words = text ? text.split(/\s+/).length : 0;
+    document.getElementById('wordCount').textContent = words + (words === 1 ? ' word' : ' words');
+}
+
+async function saveEntry() {
+    const text = document.getElementById('journalText').value.trim();
+    if (!text) { showToast('Write something first ✦'); return; }
+
+    const btn = document.getElementById('saveBtn');
+    document.getElementById('saveBtnText').innerHTML = '<span class="spinner"></span> Saving...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/journal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        if (data.status === 'saved') {
+            document.getElementById('journalText').value = '';
+            updateWordCount();
+            showToast('✦ Entry saved');
+            loadStreak();
+            newPrompt();
+        }
+    } catch(e) {
+        showToast('Something went wrong, try again');
+    } finally {
+        document.getElementById('saveBtnText').innerHTML = '✦ Save Entry';
+        btn.disabled = false;
+    }
+}
+
+async function loadStreak() {
+    try {
+        const res = await fetch('/streak');
+        const data = await res.json();
+        const banner = document.getElementById('streakBanner');
+        if (data.streak > 0) {
+            document.getElementById('streakText').textContent =
+                data.streak === 1 ? 'Day 1 — great start!' : `${data.streak} day streak — keep going!`;
+            banner.style.display = 'block';
+        }
+    } catch(e) {}
+}
+
+loadStreak();
+newPrompt();
+</script>
+{% endblock %}

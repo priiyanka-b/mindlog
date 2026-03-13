@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+    .chat-wrap {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 24px 0;
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 90px);
+    }
+
+    .chat-header {
+        animation: fadeUp 0.5s ease both;
+        margin-bottom: 20px;
+        flex-shrink: 0;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .therapist-avatar {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(124,92,191,0.25);
+    }
+
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 8px 0 24px;
+        scroll-behavior: smooth;
+    }
+
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: var(--accent2); border-radius: 2px; opacity: 0.4; }
+
+    .bubble-row { display:flex; gap:10px; animation:fadeUp 0.3s ease both; }
+    .bubble-row.user { flex-direction: row-reverse; }
+
+    .bubble {
+        max-width: 74%;
+        padding: 13px 17px;
+        border-radius: 18px;
+        font-size: 0.93rem;
+        line-height: 1.65;
+    }
+
+    .bubble.therapist {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-bottom-left-radius: 4px;
+        color: var(--text);
+        box-shadow: 0 2px 12px rgba(124,92,191,0.06);
+    }
+
+    .bubble.user {
+        background: linear-gradient(135deg, var(--accent), #9b7dd4);
+        border-bottom-right-radius: 4px;
+        color: #ffffff;
+        box-shadow: 0 4px 16px rgba(124,92,191,0.25);
+    }
+
+    .bubble-time { font-size:0.68rem; color:var(--muted); margin-top:4px; }
+    .bubble-row.user .bubble-time { text-align:right; }
+
+    .typing-bubble {
+        display:flex; align-items:center; gap:5px;
+        padding:13px 17px;
+        background:var(--surface);
+        border:1px solid var(--border);
+        border-radius:18px; border-bottom-left-radius:4px;
+        width:fit-content;
+        box-shadow:0 2px 12px rgba(124,92,191,0.06);
+    }
+
+    .typing-dot {
+        width:7px; height:7px; border-radius:50%;
+        background:var(--accent2);
+        animation:typingBounce 1.2s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(2) { animation-delay:0.2s; }
+    .typing-dot:nth-child(3) { animation-delay:0.4s; }
+
+    @keyframes typingBounce {
+        0%,60%,100% { transform:translateY(0); opacity:0.4; }
+        30% { transform:translateY(-6px); opacity:1; }
+    }
+
+    .chat-input-area {
+        flex-shrink:0;
+        padding:14px 0 24px;
+        border-top:1px solid var(--border);
+        display:flex; gap:10px; align-items:flex-end;
+        background:var(--bg);
+    }
+
+    .chat-input {
+        flex:1;
+        background:var(--surface);
+        border:1px solid var(--border);
+        border-radius:14px;
+        padding:12px 18px;
+        color:var(--text);
+        font-family:'DM Sans',sans-serif;
+        font-size:0.93rem;
+        font-weight:300;
+        line-height:1.5;
+        resize:none;
+        outline:none;
+        max-height:120px;
+        overflow-y:auto;
+        transition:all 0.2s ease;
+        box-shadow:0 2px 10px rgba(124,92,191,0.05);
+    }
+
+    .chat-input:focus {
+        border-color:rgba(124,92,191,0.4);
+        box-shadow:0 0 0 3px rgba(124,92,191,0.08);
+    }
+
+    .chat-input::placeholder { color:var(--muted); }
+
+    .send-btn {
+        width:46px; height:46px;
+        border-radius:12px;
+        background:var(--accent);
+        border:none; cursor:pointer;
+        display:flex; align-items:center; justify-content:center;
+        font-size:16px; flex-shrink:0;
+        transition:all 0.2s ease;
+        box-shadow:0 4px 14px rgba(124,92,191,0.3);
+        color:white;
+    }
+    .send-btn:hover { background:#6a4cad; transform:translateY(-1px); box-shadow:0 6px 20px rgba(124,92,191,0.35); }
+    .send-btn:active { transform:translateY(0); }
+    .send-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+
+    .welcome-msg {
+        text-align:center; padding:32px 16px;
+        color:var(--muted); font-size:0.875rem;
+        font-style:italic; line-height:1.7;
+        background:linear-gradient(135deg,rgba(124,92,191,0.04),rgba(176,157,224,0.04));
+        border:1px solid var(--border); border-radius:16px;
+    }
+</style>
+
+<div class="chat-wrap">
+    <div class="chat-header">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <div class="therapist-avatar">🧠</div>
+            <div>
+                <div style="font-family:'Playfair Display',serif; font-size:1.2rem; color:var(--text);">Your Therapist</div>
+                <div style="font-size:0.78rem; color:var(--accent); margin-top:2px;">● Online · knows your journal</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+        <div class="welcome-msg">
+            Your therapist has read your recent journal entries<br>and is here to listen. Say anything. 🌿
+        </div>
+    </div>
+
+    <div class="chat-input-area">
+        <textarea
+            class="chat-input"
+            id="chatInput"
+            placeholder="Type a message..."
+            rows="1"
+            onkeydown="handleKey(event)"
+            oninput="autoResize(this)"
+        ></textarea>
+        <button class="send-btn" onclick="sendMessage()" id="sendBtn">➤</button>
+    </div>
+</div>
+
+<script>
+let chatHistory = [];
+
+function now() {
+    return new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+}
+
+function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function appendBubble(text, role) {
+    const messages = document.getElementById('chatMessages');
+    const welcome = messages.querySelector('.welcome-msg');
+    if (welcome) welcome.remove();
+
+    const row = document.createElement('div');
+    row.className = `bubble-row ${role}`;
+
+    if (role === 'therapist') {
+        row.innerHTML = `
+            <div class="therapist-avatar" style="width:32px;height:32px;font-size:15px;align-self:flex-end;">🧠</div>
+            <div>
+                <div class="bubble therapist">${text}</div>
+                <div class="bubble-time">${now()}</div>
+            </div>`;
+    } else {
+        row.innerHTML = `
+            <div>
+                <div class="bubble user">${text}</div>
+                <div class="bubble-time">${now()}</div>
+            </div>`;
+    }
+
+    messages.appendChild(row);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function showTyping() {
+    const messages = document.getElementById('chatMessages');
+    const row = document.createElement('div');
+    row.className = 'bubble-row therapist';
+    row.id = 'typingIndicator';
+    row.innerHTML = `
+        <div class="therapist-avatar" style="width:32px;height:32px;font-size:15px;align-self:flex-end;">🧠</div>
+        <div class="typing-bubble">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>`;
+    messages.appendChild(row);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function hideTyping() {
+    const t = document.getElementById('typingIndicator');
+    if (t) t.remove();
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const sendBtn = document.getElementById('sendBtn');
+    sendBtn.disabled = true;
+    input.value = '';
+    input.style.height = 'auto';
+
+    appendBubble(text, 'user');
+    chatHistory.push({ role:'user', text });
+    showTyping();
+
+    try {
+        const res = await fetch('/therapist', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ message:text, chat_history:chatHistory })
+        });
+        const data = await res.json();
+        hideTyping();
+        appendBubble(data.reply, 'therapist');
+        chatHistory.push({ role:'therapist', text:data.reply });
+    } catch(e) {
+        hideTyping();
+        appendBubble("Sorry, something went wrong. Try again.", 'therapist');
+    } finally {
+        sendBtn.disabled = false;
+        input.focus();
+    }
+}
+</script>
+
+{% endblock %}

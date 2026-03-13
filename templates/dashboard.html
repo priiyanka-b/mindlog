@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-wide">
+
+    <div class="page-header">
+        <div class="eyebrow">Analytics</div>
+        <h1>Your <em>emotional</em> patterns</h1>
+        <p>Insights built from your journal entries over time.</p>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div id="statCards" style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:36px; animation:fadeUp 0.6s ease 0.1s both; opacity:0;"></div>
+
+    <!-- CHARTS -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; animation:fadeUp 0.6s ease 0.2s both; opacity:0;">
+        <div class="card" style="grid-column:1/-1;">
+            <div style="margin-bottom:18px;">
+                <div style="font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--text);">Emotion Timeline</div>
+                <div style="font-size:0.8rem; color:var(--muted); margin-top:4px;">How your emotions shifted across entries</div>
+            </div>
+            <div id="timelineChart" style="height:280px;"></div>
+        </div>
+
+        <div class="card">
+            <div style="margin-bottom:18px;">
+                <div style="font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--text);">Average Breakdown</div>
+                <div style="font-size:0.8rem; color:var(--muted); margin-top:4px;">Overall emotional distribution</div>
+            </div>
+            <div id="avgChart" style="height:240px;"></div>
+        </div>
+
+        <div class="card">
+            <div style="margin-bottom:18px;">
+                <div style="font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--text);">Emotion Share</div>
+                <div style="font-size:0.8rem; color:var(--muted); margin-top:4px;">Dominant emotion across all entries</div>
+            </div>
+            <div id="dominantChart" style="height:240px;"></div>
+        </div>
+    </div>
+
+    <!-- WEEKLY REPORT -->
+    <div style="margin-top:32px; animation:fadeUp 0.6s ease 0.3s both; opacity:0;">
+        <div class="section-label">Weekly Report</div>
+        <div class="card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:16px; flex-wrap:wrap;">
+                <div>
+                    <div style="font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--text);">Your Mental Wellness Report</div>
+                    <div style="font-size:0.8rem; color:var(--muted); margin-top:4px;">AI-generated insight based on your last 7 entries</div>
+                </div>
+                <button class="btn btn-secondary" onclick="generateReport()" id="reportBtn" style="flex-shrink:0;">
+                    <span id="reportBtnText">✦ Generate Report</span>
+                </button>
+            </div>
+            <div id="reportBox" style="display:none; padding:24px; background:linear-gradient(135deg,rgba(124,92,191,0.06),rgba(176,157,224,0.06)); border:1px solid rgba(124,92,191,0.15); border-radius:14px;">
+                <div style="font-size:0.7rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent); margin-bottom:14px;">Gemini Analysis</div>
+                <div id="reportText" style="font-family:'Playfair Display',serif; font-size:1rem; line-height:1.9; color:var(--text);"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script>
+const COLORS = { joy:'#7c5cbf', anxiety:'#e8924a', sadness:'#5b9fd4', fear:'#d45b7a' };
+
+function hexToRgba(hex, a) {
+    const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+    return `rgba(${r},${g},${b},${a})`;
+}
+
+const baseLayout = (extra={}) => ({
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{ family:'DM Sans, sans-serif', color:'#9b8fbb', size:11 },
+    margin:{ t:10, r:10, b:40, l:40 },
+    xaxis:{ gridcolor:'rgba(124,92,191,0.08)', linecolor:'rgba(124,92,191,0.1)', tickfont:{size:10} },
+    yaxis:{ gridcolor:'rgba(124,92,191,0.08)', linecolor:'rgba(124,92,191,0.1)', tickformat:'.0%', range:[0,1.05] },
+    legend:{ bgcolor:'transparent', font:{size:11,color:'#9b8fbb'}, orientation:'h', y:-0.25 },
+    ...extra
+});
+
+async function buildDashboard() {
+    const res = await fetch('/history');
+    const data = await res.json();
+
+    if (!data.length) {
+        document.getElementById('statCards').innerHTML = `
+            <div style="grid-column:1/-1; text-align:center; padding:60px 0; color:var(--muted); font-style:italic;">
+                No entries yet. Start journaling to see your patterns here.
+            </div>`;
+        return;
+    }
+
+    const reversed = [...data].reverse();
+    const emotions = ['joy','anxiety','sadness','fear'];
+    const totals = { joy:0, anxiety:0, sadness:0, fear:0 };
+    data.forEach(e => emotions.forEach(em => totals[em] += e[em]));
+
+    const dominant = Object.entries(totals).sort((a,b)=>b[1]-a[1])[0][0];
+    const avgJoy = (totals.joy / data.length * 100).toFixed(0);
+    const emojis = { joy:'✦', anxiety:'◈', sadness:'◇', fear:'△' };
+
+    let streakCount = 0;
+    try {
+        const sr = await fetch('/streak');
+        const sd = await sr.json();
+        streakCount = sd.streak;
+    } catch(e) {}
+
+    document.getElementById('statCards').innerHTML = `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 24px;box-shadow:0 2px 16px rgba(124,92,191,0.06);">
+            <div style="font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);margin-bottom:6px;">${data.length}</div>
+            <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Total Entries</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 24px;box-shadow:0 2px 16px rgba(124,92,191,0.06);">
+            <div style="font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);margin-bottom:6px;">${avgJoy}%</div>
+            <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Avg Joy Score</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 24px;box-shadow:0 2px 16px rgba(124,92,191,0.06);">
+            <div style="font-family:'Playfair Display',serif;font-size:2rem;color:${COLORS[dominant]};margin-bottom:6px;">${emojis[dominant]} ${dominant}</div>
+            <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Top Emotion</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 24px;box-shadow:0 2px 16px rgba(124,92,191,0.06);">
+            <div style="font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);margin-bottom:6px;">🔥 ${streakCount}</div>
+            <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Day Streak</div>
+        </div>
+    `;
+
+    const dates = reversed.map(e => e.date.split(' ')[0]);
+    Plotly.newPlot('timelineChart',
+        emotions.map(em => ({
+            x: dates, y: reversed.map(e => e[em]),
+            name: em.charAt(0).toUpperCase()+em.slice(1),
+            type:'scatter', mode:'lines+markers',
+            line:{ color:COLORS[em], width:2, shape:'spline' },
+            marker:{ size:5, color:COLORS[em] },
+            fill:'tozeroy', fillcolor:hexToRgba(COLORS[em], 0.07)
+        })),
+        baseLayout(), { displayModeBar:false, responsive:true }
+    );
+
+    Plotly.newPlot('avgChart', [{
+        x: emotions.map(e => e.charAt(0).toUpperCase()+e.slice(1)),
+        y: emotions.map(e => totals[e]/data.length),
+        type:'bar',
+        marker:{ color:emotions.map(e=>COLORS[e]), opacity:0.85 },
+        hovertemplate:'%{x}: %{y:.1%}<extra></extra>'
+    }], baseLayout({ yaxis:{gridcolor:'rgba(124,92,191,0.08)',tickformat:'.0%',range:[0,1]}, bargap:0.4 }),
+    { displayModeBar:false, responsive:true });
+
+    Plotly.newPlot('dominantChart', [{
+        values: emotions.map(e=>totals[e]),
+        labels: emotions.map(e=>e.charAt(0).toUpperCase()+e.slice(1)),
+        type:'pie', hole:0.55,
+        marker:{ colors:emotions.map(e=>COLORS[e]) },
+        textinfo:'label+percent',
+        textfont:{ size:11, color:'#9b8fbb' },
+        hovertemplate:'%{label}: %{percent}<extra></extra>'
+    }], {
+        paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+        font:{ family:'DM Sans', color:'#9b8fbb', size:11 },
+        margin:{ t:10, r:10, b:10, l:10 }, showlegend:false
+    }, { displayModeBar:false, responsive:true });
+}
+
+async function generateReport() {
+    const btn = document.getElementById('reportBtn');
+    document.getElementById('reportBtnText').innerHTML = '<span class="spinner spinner-dark"></span> Generating...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/report', { method:'POST' });
+        const data = await res.json();
+        document.getElementById('reportText').innerHTML = data.report.replace(/\n/g,'<br>');
+        const box = document.getElementById('reportBox');
+        box.style.display = 'block';
+        box.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    } catch(e) {
+        showToast('Could not generate report, try again');
+    } finally {
+        document.getElementById('reportBtnText').innerHTML = '✦ Generate Report';
+        btn.disabled = false;
+    }
+}
+
+buildDashboard();
+</script>
+{% endblock %}
